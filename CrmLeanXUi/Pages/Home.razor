@@ -1,12 +1,193 @@
-﻿@page "/home"
+﻿@page "/"
+@inject NavigationManager Navigation
+@inherits LayoutComponentBase
 
-<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
-    <MudPaper Elevation="4" Class="p-4">
-        <MudText Typo="Typo.h5">Welcome to CRM LeanX UI!</MudText>
-        <MudText Class="mb-2">Blazor WebAssembly + MudBlazor</MudText>
+<style>
+    /* Module container */
+    .module-card {
+        cursor: pointer;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 12px;
+        border-radius: 12px;
+        color: var(--mud-palette-text-primary);
+        position: relative;
+        overflow: visible;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
 
-        <MudButton Variant="Variant.Filled" Color="Color.Primary">
-            Let's start
-        </MudButton>
-    </MudPaper>
+        /* Hover: nổi bật */
+        .module-card:hover {
+            transform: translateY(-6px) scale(1.08);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+
+    /* Icon wrapper viền gradient */
+    .module-icon-wrapper {
+        position: relative;
+        display: inline-block;
+    }
+
+        .module-icon-wrapper::before {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: -5px;
+            right: -5px;
+            bottom: -5px;
+            border-radius: 14px;
+            background: linear-gradient(45deg, #00BFFF, #1E90FF, #00BFFF, #1E90FF);
+
+            background-size: 400% 400%;
+            opacity: 0;
+            z-index: -1;
+            filter: blur(3px);
+            transition: opacity 0.3s ease;
+            animation: gradient-border 3s linear infinite;
+        }
+
+    .module-card:hover .module-icon-wrapper::before {
+        opacity: 1;
+    }
+
+    /* Gradient animation */
+    @@keyframes gradient-border {
+        0%
+
+    {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
+
+    }
+
+    /* Icon 125px */
+    .module-icon {
+        width: 115px;
+        height: 115px;
+        object-fit: contain;
+        margin-bottom: 8px;
+        display: block;
+        transition: transform 0.3s ease, filter 0.3s ease;
+    }
+
+    .module-card:hover .module-icon {
+        transform: scale(1.1);
+        filter: drop-shadow(0 0 10px #FFD700);
+    }
+
+    /* Module title */
+    .module-title {
+        font-weight: 600;
+        font-size: 1rem;
+        transition: color 0.3s ease;
+    }
+
+    /* Grid container */
+    .module-grid {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    /* Columns */
+    .col-left, .col-right {
+        flex: 0 0 10%;
+        max-width: 10%;
+    }
+
+    .col-center {
+        flex: 0 0 90%;
+        max-width: 80%;
+    }
+
+    /* Module spacing */
+    .module-grid .mud-item {
+        padding: 12px;
+    }
+
+</style>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 px-4">
+
+    <!-- Search -->
+    <MudTextField @bind-Value="searchText"
+                  Placeholder="Tìm module..."
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  Margin="Margin.Dense"
+                  FullWidth="true"
+                  Class="search-box"
+                  Style="margin-bottom:35px;margin-top:50px;" />
+
+    <!-- Dashboard Grid -->
+    <div class="module-grid">
+        <div class="col-left"></div>
+        <div class="col-center">
+            <MudGrid Spacing="3">
+                @foreach (var module in modulesFiltered)
+                {
+                    <MudItem xs="6" sm="4" md="2" lg="2">
+                        <div class="module-card" @onclick="@(() => Navigation.NavigateTo(module.Url))">
+
+                            <div class="module-icon-wrapper">
+                                <img src="@module.Icon" class="module-icon" />
+                            </div>
+
+                            <MudText Typo="Typo.subtitle1" Class="module-title">
+                                @module.Name
+                            </MudText>
+
+                        </div>
+                    </MudItem>
+                }
+            </MudGrid>
+        </div>
+        <div class="col-right"></div>
+    </div>
+
 </MudContainer>
+
+@code {
+    [CascadingParameter] public bool IsDarkMode { get; set; }
+
+    private string searchText = "";
+
+    private List<ModuleCard> modules = new()
+    {
+        new ModuleCard{ Name="Nhân sự",        Icon="/images/home/hr.png",          Url="/hr" },
+        new ModuleCard{ Name="Báo giá",        Icon="/images/home/quotation.png",   Url="/quotation" },
+        new ModuleCard{ Name="Kế hoạch sản xuất",           Icon="/images/home/production.png",  Url="/production-plan" },
+        new ModuleCard{ Name="Mua hàng",       Icon="/images/home/purchase.png",    Url="/purchase" },
+        new ModuleCard{ Name="QC",             Icon="/images/home/qc.png",          Url="/qc" },
+        new ModuleCard{ Name="Nhật ký máy",    Icon="/images/home/machine.png",     Url="/machine-log" },
+
+        new ModuleCard{ Name="Dự án",          Icon="/images/home/folder.png",          Url="" },
+        new ModuleCard{ Name="Bán hàng",       Icon="/images/home/nhan_hang.png",   Url="" },
+        new ModuleCard{ Name="Cộng tác viên",  Icon="/images/home/hop_tac.png",  Url="" },
+        new ModuleCard{ Name="Kế toán",        Icon="/images/home/chi_phi_user.png",    Url="" },
+        new ModuleCard{ Name="Đánh giá",             Icon="/images/home/duan_outsoucing.png",          Url="" },
+        new ModuleCard{ Name="Đào tạo",      Icon="/images/home/study.png",     Url="" },
+    };
+
+    private IEnumerable<ModuleCard> modulesFiltered =>
+        string.IsNullOrWhiteSpace(searchText)
+            ? modules
+            : modules.Where(x => x.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase));
+
+    private class ModuleCard
+    {
+        public string Name { get; set; }
+        public string Icon { get; set; }
+        public string Url { get; set; }
+    }
+}

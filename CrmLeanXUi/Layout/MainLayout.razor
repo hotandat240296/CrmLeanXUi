@@ -1,11 +1,18 @@
 ﻿@inherits LayoutComponentBase
 @inject MudBlazor.ISnackbar Snackbar
 <style>
-    .white-icon .mud-icon-root {
-        color: white !important;
+    .mud-menu-item-icon {
+        vertical-align: middle;
+        font-size: 20px;
+    }
+
+    .mr-2 {
+        margin-right: 8px;
     }
 </style>
-<MudThemeProvider @ref="themeProvider" Theme="@currentTheme" />
+
+<!-- Theme, Dialog, Snackbar, Popover Providers -->
+<MudThemeProvider @ref="themeProvider" Theme="@currentTheme" IsDarkMode="_isDarkMode" />
 <MudDialogProvider />
 <MudSnackbarProvider />
 <MudPopoverProvider />
@@ -13,17 +20,25 @@
 <MudLayout>
 
     <!-- AppBar -->
-    <MudAppBar Color="Color.Primary" Elevation="1">
-        <MudText Typo="Typo.h6" Class="ml-2 flex-grow-1"><MudImage Src="/images/LeanX-logo.png" Alt="CRM LeanX UI" Style="width:160px;height:auto" Class="ml-2" /></MudText>
+    <MudAppBar Elevation="1"
+               Style="@($"background-color:{(_isDarkMode ? "#3C3C3C" : "#714B67")}; color:{(_isDarkMode ? currentTheme.PaletteDark.TextPrimary : currentTheme.PaletteLight.TextPrimary)}")">
+        <MudText Typo="Typo.h6" Class="ml-2 flex-grow-1">
+            <MudLink Href="/">
+                <MudImage Src="/images/LeanX-logo.png" Alt="CRM LeanX UI"
+                          Style="width:160px;height:auto" Class="ml-2" />
+            </MudLink>
+        </MudText>
 
         <!-- Thông báo -->
-        <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" OnClick="@(() => Snackbar.Add("Notifications clicked", Severity.Info))" />
+        <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit"
+                       OnClick="@(() => Snackbar.Add("Notifications clicked", Severity.Info))" />
 
         <!-- Chat -->
-        <MudIconButton Icon="@Icons.Material.Filled.Chat" Color="Color.Inherit" OnClick="@(() => Snackbar.Add("Chat clicked", Severity.Info))" />
+        <MudIconButton Icon="@Icons.Material.Filled.Chat" Color="Color.Inherit"
+                       OnClick="@(() => Snackbar.Add("Chat clicked", Severity.Info))" />
 
         <!-- Dark mode toggle -->
-        <MudIconButton Icon="@(_isDarkMode? Icons.Material.Filled.DarkMode : Icons.Material.Filled.LightMode)"
+        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.DarkMode : Icons.Material.Filled.LightMode)"
                        Color="Color.Inherit"
                        OnClick="ToggleDarkMode" />
 
@@ -32,13 +47,24 @@
                  AnchorOrigin="Origin.TopRight"
                  TransformOrigin="Origin.TopRight"
                  Class="white-icon">
-            <MudMenuItem Href="/profile">Profile</MudMenuItem>
-            <MudMenuItem Href="/settings">Settings</MudMenuItem>
-            <MudMenuItem OnClick="Logout">Logout</MudMenuItem>
+
+            <MudMenuItem Href="/profile">
+                <MudIcon Icon="@Icons.Material.Filled.Person" Class="mud-menu-item-icon mr-2" />
+                Profile
+            </MudMenuItem>
+
+            <MudMenuItem Href="/settings">
+                <MudIcon Icon="@Icons.Material.Filled.Settings" Class="mud-menu-item-icon mr-2" />
+                Settings
+            </MudMenuItem>
+
+            <MudMenuItem OnClick="Logout">
+                <MudIcon Icon="@Icons.Material.Filled.Logout" Class="mud-menu-item-icon mr-2" />
+                Logout
+            </MudMenuItem>
+
         </MudMenu>
-
     </MudAppBar>
-
 
     <!-- Main content -->
     <MudMainContent Class="p-4">
@@ -47,47 +73,49 @@
 
 </MudLayout>
 
+@using MudBlazor
+
 @code {
     private bool _isDarkMode = false;
-
     private MudThemeProvider themeProvider;
 
-    private MudTheme lightTheme = new MudTheme()
+    // Theme dịu mắt, cân bằng cho light & dark mode
+    private MudTheme currentTheme = new MudTheme()
     {
         PaletteLight = new PaletteLight()
         {
-            Primary = "#1976d2"
-            // Có thể thêm cấu hình màu sắc khác nếu muốn
-        }
-    };
-
-    private MudTheme darkTheme = new MudTheme()
-    {
+            Primary = "#1565C0",       // deep blue, dịu mắt
+            Secondary = "#0288D1",     // hỗ trợ accent
+            Background = "#D4C9D1",
+            Surface = "#FFFFFF",
+            TextPrimary = "#212121",
+            TextSecondary = "#424242",
+            AppbarBackground = "#1565C0",
+            AppbarText = "#FFFFFF"
+        },
         PaletteDark = new PaletteDark()
         {
-            Primary = "#90caf9"
-            // Có thể thêm cấu hình màu sắc khác nếu muốn
+            Primary = "#90CAF9",       // soft blue
+            Secondary = "#64B5F6",
+            Background = "#121212",
+            Surface = "#1E1E1E",
+            TextPrimary = "#E0E0E0",
+            TextSecondary = "#B0BEC5",
+            AppbarBackground = "#90CAF9",
+            AppbarText = "#212121"
         }
     };
-
-    private MudTheme currentTheme;
-
-    protected override void OnInitialized()
-    {
-        currentTheme = lightTheme;
-    }
 
     void ToggleDarkMode()
     {
         _isDarkMode = !_isDarkMode;
-        currentTheme = _isDarkMode ? darkTheme : lightTheme;
-        themeProvider.Theme = currentTheme;
+        // MudThemeProvider tự đổi màu theo IsDarkMode
         StateHasChanged();
     }
 
     void Logout()
     {
         Snackbar.Add("Logout clicked", Severity.Warning);
-        // Xử lý logout thêm nếu cần
+        // Xử lý logout nếu cần
     }
 }

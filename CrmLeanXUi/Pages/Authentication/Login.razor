@@ -1,4 +1,4 @@
-﻿@page "/"
+﻿@page "/login"
 @layout CrmLeanXUi.Layout.AuthencationLayout
 @using MudBlazor
 @inject ISnackbar _snackBar
@@ -11,11 +11,11 @@
 
         <MudGrid Justify="Justify.Center" AlignItems="AlignItems.Center" Style="height: 100vh; display: flex; justify-content: center; align-items: center;">
             <!-- Left image column -->
-            <MudItem xs="12" sm="6" Class="crm-login-img">
+            @* <MudItem xs="12" sm="6" Class="crm-login-img">
                 <img src=""
                      onerror="this.onerror=null; this.src='https://firebasestorage.googleapis.com/v0/b/monkeyblogging-b8dd6.appspot.com/o/images%2FimageSignIn.png?alt=media&token=2fbfd7a0-94e5-4a14-bd1b-e06cb8a56bc9';"
                      alt="Login Image" />
-            </MudItem>
+            </MudItem> *@
             
             <MudItem xs="12" sm="6">
                 <MudCard Class="w-full max-w-md py-5 login-card logo-border">
