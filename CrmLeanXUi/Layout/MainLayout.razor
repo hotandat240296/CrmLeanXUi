@@ -1,0 +1,93 @@
+﻿@inherits LayoutComponentBase
+@inject MudBlazor.ISnackbar Snackbar
+<style>
+    .white-icon .mud-icon-root {
+        color: white !important;
+    }
+</style>
+<MudThemeProvider @ref="themeProvider" Theme="@currentTheme" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudPopoverProvider />
+
+<MudLayout>
+
+    <!-- AppBar -->
+    <MudAppBar Color="Color.Primary" Elevation="1">
+        <MudText Typo="Typo.h6" Class="ml-2 flex-grow-1"><MudImage Src="/images/LeanX-logo.png" Alt="CRM LeanX UI" Style="width:160px;height:auto" Class="ml-2" /></MudText>
+
+        <!-- Thông báo -->
+        <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" OnClick="@(() => Snackbar.Add("Notifications clicked", Severity.Info))" />
+
+        <!-- Chat -->
+        <MudIconButton Icon="@Icons.Material.Filled.Chat" Color="Color.Inherit" OnClick="@(() => Snackbar.Add("Chat clicked", Severity.Info))" />
+
+        <!-- Dark mode toggle -->
+        <MudIconButton Icon="@(_isDarkMode? Icons.Material.Filled.DarkMode : Icons.Material.Filled.LightMode)"
+                       Color="Color.Inherit"
+                       OnClick="ToggleDarkMode" />
+
+        <!-- Avatar menu -->
+        <MudMenu Icon="@Icons.Material.Filled.AccountCircle"
+                 AnchorOrigin="Origin.TopRight"
+                 TransformOrigin="Origin.TopRight"
+                 Class="white-icon">
+            <MudMenuItem Href="/profile">Profile</MudMenuItem>
+            <MudMenuItem Href="/settings">Settings</MudMenuItem>
+            <MudMenuItem OnClick="Logout">Logout</MudMenuItem>
+        </MudMenu>
+
+    </MudAppBar>
+
+
+    <!-- Main content -->
+    <MudMainContent Class="p-4">
+        @Body
+    </MudMainContent>
+
+</MudLayout>
+
+@code {
+    private bool _isDarkMode = false;
+
+    private MudThemeProvider themeProvider;
+
+    private MudTheme lightTheme = new MudTheme()
+    {
+        PaletteLight = new PaletteLight()
+        {
+            Primary = "#1976d2"
+            // Có thể thêm cấu hình màu sắc khác nếu muốn
+        }
+    };
+
+    private MudTheme darkTheme = new MudTheme()
+    {
+        PaletteDark = new PaletteDark()
+        {
+            Primary = "#90caf9"
+            // Có thể thêm cấu hình màu sắc khác nếu muốn
+        }
+    };
+
+    private MudTheme currentTheme;
+
+    protected override void OnInitialized()
+    {
+        currentTheme = lightTheme;
+    }
+
+    void ToggleDarkMode()
+    {
+        _isDarkMode = !_isDarkMode;
+        currentTheme = _isDarkMode ? darkTheme : lightTheme;
+        themeProvider.Theme = currentTheme;
+        StateHasChanged();
+    }
+
+    void Logout()
+    {
+        Snackbar.Add("Logout clicked", Severity.Warning);
+        // Xử lý logout thêm nếu cần
+    }
+}
