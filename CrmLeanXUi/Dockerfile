@@ -11,13 +11,13 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
-
 # Copy only the csproj first for better cache use
-COPY ["CrmLeanXUi.csproj", "./"]
+COPY ["src/CrmLeanXUi/CrmLeanXUi.csproj", "./"]
+
 # Restore packages
 RUN dotnet restore "./CrmLeanXUi.csproj"
 
-# Copy everything and publish
+# Copy everything and build
 COPY . .
 RUN dotnet build "./CrmLeanXUi.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
