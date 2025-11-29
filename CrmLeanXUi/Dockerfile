@@ -1,34 +1,40 @@
-﻿# Stage 1: Base image
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
-WORKDIR /app
-EXPOSE 8080
-EXPOSE 8081
-
-# Stage 2: Build
+﻿############################################################
+# Stage 1: Build Blazor WebAssembly
+############################################################
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
-# Copy project file
+# 1. Copy project file(s) để restore NuGet
 COPY CrmLeanXUi/CrmLeanXUi.csproj ./CrmLeanXUi/
 
-# Restore packages
+# 2. Restore packages
 RUN dotnet restore ./CrmLeanXUi/CrmLeanXUi.csproj
 
-# Copy toàn bộ source code
-COPY CrmLeanXUi/CrmLeanXUi.csproj ./CrmLeanXUi/
+# 3. Copy toàn bộ source code
 COPY CrmLeanXUi/. ./CrmLeanXUi/
 
-# Build
-RUN dotnet build ./CrmLeanXUi/CrmLeanXUi.csproj -c $BUILD_CONFIGURATION -o /app/build
+# 4. Chuyển vào thư mục project
+WORKDIR /src/CrmLeanXUi
 
-# Stage 3: Publish
-FROM build AS publish
-ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish ./CrmLeanXUi/CrmLeanXUi.csproj -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+# 5. Build project
+RUN dotnet build -c $BUILD_CONFIGURATION -o /app/build
 
-# Stage 4: Final
-FROM base AS final
+# 6. Publish project (tối ưu cho Docker)
+RUN dotnet publish -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+
+############################################################
+# Stage 2: Runtime
+############################################################
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
-COPY --from=publish /app/publish .
+
+# 1. Copy output từ stage build
+COPY --from=build /app/publish .
+
+# 2. Expose port (nếu cần)
+EXPOSE 8080
+EXPOSE 8081
+
+# 3. Chạy ứng dụng
 ENTRYPOINT ["dotnet", "CrmLeanXUi.dll"]
