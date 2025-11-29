@@ -1,40 +1,35 @@
-﻿############################################################
-# Stage 1: Build Blazor WebAssembly
-############################################################
+﻿# Build stage: use official .NET 8 SDK to restore and publish the Blazor WebAssembly app
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
-# 1. Copy project file(s) để restore NuGet
-COPY CrmLeanXUi/CrmLeanXUi.csproj ./CrmLeanXUi/
+# Copy project file and restore dependencies
+COPY ["CrmLeanXUi/CrmLeanXUi.csproj", "CrmLeanXUi/"]
+RUN dotnet restore "CrmLeanXUi/CrmLeanXUi.csproj"
 
-# 2. Restore packages
-RUN dotnet restore ./CrmLeanXUi/CrmLeanXUi.csproj
+# Copy the rest of the application code
+COPY . .
 
-# 3. Copy toàn bộ source code
-COPY CrmLeanXUi/. ./CrmLeanXUi/
+# Publish the Blazor WebAssembly app (produces static files in /app/publish/wwwroot)
+WORKDIR "/src/CrmLeanXUi"
+RUN dotnet publish "CrmLeanXUi.csproj" -c Release -o /app/publish
 
-# 4. Chuyển vào thư mục project
-WORKDIR /src/CrmLeanXUi
+# Runtime stage: serve the static files with Caddy (no nginx)
+FROM caddy:2-alpine AS runtime
 
-# 5. Build project
-RUN dotnet build -c $BUILD_CONFIGURATION -o /app/build
+# Clean default content and copy published Blazor static files
+RUN rm -rf /srv/*
+COPY --from=build /app/publish/wwwroot/ /srv/
 
-# 6. Publish project (tối ưu cho Docker)
-RUN dotnet publish -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+# Create a minimal Caddyfile to serve static files on port 80
+RUN printf '%s\n' ':80' 'root * /srv' 'file_server' > /etc/caddy/Caddyfile \
+    && apk add --no-cache curl
 
-############################################################
-# Stage 2: Runtime
-############################################################
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
-WORKDIR /app
+# Expose HTTP port
+EXPOSE 80
 
-# 1. Copy output từ stage build
-COPY --from=build /app/publish .
+# Simple healthcheck using curl
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
+  CMD curl -f http://localhost/ || exit 1
 
-# 2. Expose port (nếu cần)
-EXPOSE 8080
-EXPOSE 8081
-
-# 3. Chạy ứng dụng
-ENTRYPOINT ["dotnet", "CrmLeanXUi.dll"]
+# Run Caddy in foreground using the configured Caddyfile
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
