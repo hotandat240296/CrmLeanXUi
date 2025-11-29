@@ -16,8 +16,8 @@ COPY CrmLeanXUi/CrmLeanXUi.csproj ./CrmLeanXUi/
 RUN dotnet restore ./CrmLeanXUi/CrmLeanXUi.csproj
 
 # Copy toàn bộ source code
-COPY src/CrmLeanXUi/CrmLeanXUi.csproj ./CrmLeanXUi/ # optional, đã copy trên
-COPY src/CrmLeanXUi/. ./CrmLeanXUi/
+COPY CrmLeanXUi/CrmLeanXUi.csproj ./CrmLeanXUi/ # optional, đã copy trên
+COPY CrmLeanXUi/. ./CrmLeanXUi/
 
 # Build
 RUN dotnet build ./CrmLeanXUi/CrmLeanXUi.csproj -c $BUILD_CONFIGURATION -o /app/build
