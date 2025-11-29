@@ -1,0 +1,63 @@
+# Production values for DevBriX ERP API
+# Use this file for production deployment with specific configurations
+
+image:
+  repository: tandat240206/crm-web
+  tag: "1.0.0"  # Use specific version for production
+  pullPolicy: Always
+
+replicaCount: 1  # Higher replica count for production
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+env:
+  ASPNETCORE_ENVIRONMENT: Production
+  ASPNETCORE_URLS: "http://+:8080"
+
+# Production specific configurations
+config:
+  Logging__LogLevel__Default: "Warning"
+  Logging__LogLevel__Microsoft: "Warning"
+  Logging__LogLevel__System: "Warning"
+
+# Add production secrets (base64 encoded)
+secrets: {}
+  # ConnectionStrings__DefaultConnection: "base64-encoded-connection-string"
+  # JwtSettings__SecretKey: "base64-encoded-jwt-secret"
+
+# Node affinity for production workloads
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - crm-web
+        topologyKey: kubernetes.io/hostname
+
+# Production health checks - more conservative settings
+healthCheck:
+  enabled: true
+  livenessProbe:
+    tcpSocket:
+      port: 8080
+    initialDelaySeconds: 90
+    periodSeconds: 30
+    timeoutSeconds: 15
+    failureThreshold: 5
+  readinessProbe:
+    tcpSocket:
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    timeoutSeconds: 10
+    failureThreshold: 3

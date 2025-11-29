@@ -1,0 +1,14 @@
+apiVersion: v2
+name: crm-web
+description: A Helm chart for Beach Chairs API
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - idea
+home: https://crm.web.iotsystem-vn.com
+sources:
+  - https://github.com/hotandat240296/CrmLeanXUi
+maintainers:
+  - name: Idea Team
+    email: admin@ideagroup.com

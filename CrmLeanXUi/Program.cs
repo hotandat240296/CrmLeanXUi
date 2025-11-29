@@ -4,6 +4,7 @@ using CrmLeanXUi.ApiService.Authentication;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using MudBlazor.Services;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -16,5 +17,6 @@ builder.Services.AddMudServices();
 
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
+builder.Services.AddHealthChecks();
 
 await builder.Build().RunAsync();

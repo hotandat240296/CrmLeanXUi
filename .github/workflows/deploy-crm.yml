@@ -1,0 +1,239 @@
+name: Deploy API Only
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'CrmLeanXUi/**'
+      - 'helm-charts/crm-web/**'
+      - 'Dockerfile'
+      - '.github/workflows/deploy-crm.yml'
+  workflow_dispatch:
+    inputs:
+      deploy_environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+        - production
+        - staging
+      deploy_namespace:
+        description: 'Namespace to deploy to'
+        required: true
+        default: 'idea-production'
+        type: choice
+        options:
+        - idea-production
+        - idea-staging
+      version_increment:
+        description: 'Version to use (e.g., v1.0.1 or 1.0.1 or just 1 for patch, empty for auto-increment)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  DOCKER_REGISTRY: docker.io
+  TOKEN_IMAGE_NAME: tandat240206/crm-web
+  TOKEN_HELM_CHART_PATH: helm-charts/crm-web
+  VERSION_MAJOR: 1
+  VERSION_MINOR: 0
+
+jobs:
+  build-and-push-token:
+    name: Build and Push API Docker Image
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.determine-tag.outputs.tag }}
+      version-tag: ${{ steps.determine-tag.outputs.version_tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version and tags
+        id: determine-tag
+        run: |
+          # Get the latest tag matching v1.0.x pattern
+          VERSION_PREFIX="v${{ env.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}"
+          LATEST_TAG=$(git tag -l "${VERSION_PREFIX}.*" | sort -V | tail -n 1)
+          
+          if [ -z "$LATEST_TAG" ]; then
+            # No existing tag, start with v1.0.0
+            PATCH=0
+          else
+            # Extract patch version and increment
+            PATCH=$(echo "$LATEST_TAG" | sed "s|${VERSION_PREFIX}.||")
+            PATCH=$((PATCH + 1))
+          fi
+          
+          # Process manual version input (supports multiple formats)
+          INPUT_VERSION="${{ github.event.inputs.version_increment }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            # Remove 'v' prefix if exists
+            INPUT_VERSION="${INPUT_VERSION#v}"
+            
+            # Check if it's a full version (e.g., 1.0.1)
+            if [[ "$INPUT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              # Full version provided (e.g., 1.0.1)
+              VERSION_TAG="v${INPUT_VERSION}"
+              echo "✏️ Using full version: ${VERSION_TAG}"
+            elif [[ "$INPUT_VERSION" =~ ^[0-9]+$ ]]; then
+              # Only patch number provided (e.g., 1)
+              PATCH=$INPUT_VERSION
+              VERSION_TAG="${VERSION_PREFIX}.${PATCH}"
+              echo "✏️ Using patch version: ${PATCH} → ${VERSION_TAG}"
+            else
+              # Invalid format, use auto-increment
+              VERSION_TAG="${VERSION_PREFIX}.${PATCH}"
+              echo "⚠️ Warning: Invalid version format '${INPUT_VERSION}'. Using auto-increment: ${VERSION_TAG}"
+            fi
+          else
+            # Auto-increment
+            VERSION_TAG="${VERSION_PREFIX}.${PATCH}"
+            echo "🔄 Auto-incrementing to: ${VERSION_TAG}"
+          fi
+          
+          SHA_TAG=$(echo ${{ github.sha }} | cut -c1-7)
+          
+          echo "tag=sha-${SHA_TAG}" >> $GITHUB_OUTPUT
+          echo "version_tag=${VERSION_TAG}" >> $GITHUB_OUTPUT
+          echo "📦 Building version: ${VERSION_TAG}"
+          echo "🔖 SHA tag: sha-${SHA_TAG}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push CRM Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: CrmLeanXUi/Dockerfile
+          push: true
+          tags: |
+            ${{ env.TOKEN_IMAGE_NAME }}:${{ steps.determine-tag.outputs.version_tag }}
+            ${{ env.TOKEN_IMAGE_NAME }}:sha-${{ github.sha }}
+            ${{ env.TOKEN_IMAGE_NAME }}:latest
+          cache-from: type=gha,scope=token
+          cache-to: type=gha,mode=max,scope=token
+          platforms: linux/amd64
+
+      - name: Create Git tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          VERSION_TAG="${{ steps.determine-tag.outputs.version_tag }}"
+          
+          # Check if tag already exists
+          if git rev-parse "$VERSION_TAG" >/dev/null 2>&1; then
+            echo "⚠️ Tag $VERSION_TAG already exists, skipping tag creation"
+          else
+            git tag -a "$VERSION_TAG" -m "Release $VERSION_TAG"
+            git push origin "$VERSION_TAG"
+            echo "✅ Created and pushed tag: $VERSION_TAG"
+          fi
+
+  deploy-token:
+    name: Deploy CRM to Kubernetes
+    needs: [build-and-push-token]
+    runs-on: ubuntu-latest
+    if: always() && (needs.build-and-push-token.result == 'success' || needs.build-and-push-token.result == 'skipped')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'latest'
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
+
+      - name: Configure Kubernetes
+        uses: azure/k8s-set-context@v3
+        with:
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+      - name: Determine image tag for deployment
+        id: image-tag
+        run: |
+          echo "tag=${{ needs.build-and-push-token.outputs.version-tag }}" >> $GITHUB_OUTPUT
+          echo "🚀 Deploying version: ${{ needs.build-and-push-token.outputs.version-tag }}"
+
+      - name: Deploy CRM to Kubernetes
+        run: |
+          # Set default values for auto-deploy (push to main), otherwise use manual inputs
+          ENVIRONMENT="${{ github.event.inputs.deploy_environment || 'production' }}"
+          NAMESPACE="${{ github.event.inputs.deploy_namespace || 'idea-production' }}"
+          IMAGE_TAG="${{ steps.image-tag.outputs.tag }}"
+          
+          echo "🚀 Deploying to environment: $ENVIRONMENT"
+          echo "📦 Namespace: $NAMESPACE"
+          echo "🏷️ Image tag: $IMAGE_TAG"
+          
+          VALUES_FILE=""
+          if [ "$ENVIRONMENT" == "production" ]; then
+            VALUES_FILE="-f ${{ env.TOKEN_HELM_CHART_PATH }}/values-prod.yaml"
+          fi
+          
+          helm upgrade --install crm-web ${{ env.TOKEN_HELM_CHART_PATH }} \
+            --set image.tag=$IMAGE_TAG \
+            --set namespace=$NAMESPACE \
+            --namespace $NAMESPACE \
+            --create-namespace \
+            --wait \
+            --timeout=10m \
+            $VALUES_FILE
+
+      - name: Verify deployment
+        run: |
+          NAMESPACE="${{ github.event.inputs.deploy_namespace || 'idea-production' }}"
+          kubectl get pods -n $NAMESPACE -l app.kubernetes.io/name=crm-web
+          kubectl get services -n $NAMESPACE -l app.kubernetes.io/name=crm-web
+          kubectl get ingress -n $NAMESPACE -l app.kubernetes.io/name=crm-web
+
+      - name: Health check
+        run: |
+          echo "Waiting for Token to be ready..."
+          sleep 60
+          
+          RESPONSE=$(curl -s --max-time 15 https://crm.web.iotsystems-vn.com/health || echo "")
+          
+          if echo "$RESPONSE" | jq -e '.status=="Healthy"' >/dev/null; then
+            echo "✅ Token is healthy"
+            echo "TOKEN_HEALTH=healthy" >> $GITHUB_ENV
+          else
+            echo "⚠️ Token health check failed or not ready yet"
+            echo "TOKEN_HEALTH=unhealthy" >> $GITHUB_ENV
+            echo "Response was: $RESPONSE"
+          fi
+
+      - name: Generate summary
+        run: |
+          ENVIRONMENT="${{ github.event.inputs.deploy_environment || 'production' }}"
+          NAMESPACE="${{ github.event.inputs.deploy_namespace || 'idea-production' }}"
+          echo "## Token Deployment Summary 🎯" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: $ENVIRONMENT" >> $GITHUB_STEP_SUMMARY
+          echo "- **Namespace**: $NAMESPACE" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ needs.build-and-push-token.outputs.version-tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image Tag**: ${{ steps.image-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Docker Image**: ${{ env.TOKEN_IMAGE_NAME }}:${{ needs.build-and-push-token.outputs.version-tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL**: https://crm.web.iotsystems-vn.com" >> $GITHUB_STEP_SUMMARY
+          echo "- **Health Status**: ${{ env.TOKEN_HEALTH }}" >> $GITHUB_STEP_SUMMARY
