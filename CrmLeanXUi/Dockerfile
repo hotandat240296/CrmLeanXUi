@@ -1,35 +1,30 @@
-﻿# Build stage: use official .NET 8 SDK to restore and publish the Blazor WebAssembly app
+# See https://aka.ms/customizecontainer to learn how to customize your debug container and how Visual Studio uses this Dockerfile to build your images for faster debugging.
+
+# This stage is used when running from VS in fast mode (Default for Debug configuration)
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+USER $APP_UID
+WORKDIR /app
+EXPOSE 8080
+EXPOSE 8081
+
+
+# This stage is used to build the service project
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-
-# Copy project file and restore dependencies
 COPY ["CrmLeanXUi/CrmLeanXUi.csproj", "CrmLeanXUi/"]
-RUN dotnet restore "CrmLeanXUi/CrmLeanXUi.csproj"
-
-# Copy the rest of the application code
+RUN dotnet restore "./CrmLeanXUi/CrmLeanXUi.csproj"
 COPY . .
-
-# Publish the Blazor WebAssembly app (produces static files in /app/publish/wwwroot)
 WORKDIR "/src/CrmLeanXUi"
-RUN dotnet publish "CrmLeanXUi.csproj" -c Release -o /app/publish
+RUN dotnet build "./CrmLeanXUi.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
-# Runtime stage: serve the static files with Caddy (no nginx)
-FROM caddy:2-alpine AS runtime
+# This stage is used to publish the service project to be copied to the final stage
+FROM build AS publish
+ARG BUILD_CONFIGURATION=Release
+RUN dotnet publish "./CrmLeanXUi.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
-# Clean default content and copy published Blazor static files
-RUN rm -rf /srv/*
-COPY --from=build /app/publish/wwwroot/ /srv/
-
-# Create a minimal Caddyfile to serve static files on port 80
-RUN printf '%s\n' ':80' 'root * /srv' 'file_server' > /etc/caddy/Caddyfile \
-    && apk add --no-cache curl
-
-# Expose HTTP port
-EXPOSE 80
-
-# Simple healthcheck using curl
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
-  CMD curl -f http://localhost/ || exit 1
-
-# Run Caddy in foreground using the configured Caddyfile
-CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+# This stage is used in production or when running from VS in regular mode (Default when not using the Debug configuration)
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+ENTRYPOINT ["dotnet", "CrmLeanXUi.dll"]
