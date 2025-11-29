@@ -6,6 +6,7 @@ version: 1.0.0
 appVersion: "1.0.0"
 keywords:
   - idea
+  - crm-web
 home: https://crm.web.iotsystem-vn.com
 sources:
   - https://github.com/hotandat240296/CrmLeanXUi
