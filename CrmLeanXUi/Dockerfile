@@ -12,7 +12,7 @@ ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
 # Copy only the csproj first for better cache use
-COPY ["src/CrmLeanXUi/CrmLeanXUi.csproj", "./"]
+COPY ["CrmLeanXUi/CrmLeanXUi.csproj", "./"]
 
 # Restore packages
 RUN dotnet restore "./CrmLeanXUi.csproj"
