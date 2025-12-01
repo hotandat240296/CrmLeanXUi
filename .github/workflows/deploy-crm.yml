@@ -60,52 +60,35 @@ jobs:
       - name: Determine version and tags
         id: determine-tag
         run: |
-          # Get the latest tag matching v1.0.x pattern
           VERSION_PREFIX="v${{ env.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}"
           LATEST_TAG=$(git tag -l "${VERSION_PREFIX}.*" | sort -V | tail -n 1)
           
           if [ -z "$LATEST_TAG" ]; then
-            # No existing tag, start with v1.0.0
             PATCH=0
           else
-            # Extract patch version and increment
             PATCH=$(echo "$LATEST_TAG" | sed "s|${VERSION_PREFIX}.||")
             PATCH=$((PATCH + 1))
           fi
           
-          # Process manual version input (supports multiple formats)
           INPUT_VERSION="${{ github.event.inputs.version_increment }}"
           if [ -n "$INPUT_VERSION" ]; then
-            # Remove 'v' prefix if exists
             INPUT_VERSION="${INPUT_VERSION#v}"
-            
-            # Check if it's a full version (e.g., 1.0.1)
             if [[ "$INPUT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              # Full version provided (e.g., 1.0.1)
               VERSION_TAG="v${INPUT_VERSION}"
-              echo "✏️ Using full version: ${VERSION_TAG}"
             elif [[ "$INPUT_VERSION" =~ ^[0-9]+$ ]]; then
-              # Only patch number provided (e.g., 1)
               PATCH=$INPUT_VERSION
               VERSION_TAG="${VERSION_PREFIX}.${PATCH}"
-              echo "✏️ Using patch version: ${PATCH} → ${VERSION_TAG}"
             else
-              # Invalid format, use auto-increment
               VERSION_TAG="${VERSION_PREFIX}.${PATCH}"
-              echo "⚠️ Warning: Invalid version format '${INPUT_VERSION}'. Using auto-increment: ${VERSION_TAG}"
             fi
           else
-            # Auto-increment
             VERSION_TAG="${VERSION_PREFIX}.${PATCH}"
-            echo "🔄 Auto-incrementing to: ${VERSION_TAG}"
           fi
           
           SHA_TAG=$(echo ${{ github.sha }} | cut -c1-7)
           
           echo "tag=sha-${SHA_TAG}" >> $GITHUB_OUTPUT
           echo "version_tag=${VERSION_TAG}" >> $GITHUB_OUTPUT
-          echo "📦 Building version: ${VERSION_TAG}"
-          echo "🔖 SHA tag: sha-${SHA_TAG}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -138,13 +121,11 @@ jobs:
           
           VERSION_TAG="${{ steps.determine-tag.outputs.version_tag }}"
           
-          # Check if tag already exists
           if git rev-parse "$VERSION_TAG" >/dev/null 2>&1; then
-            echo "⚠️ Tag $VERSION_TAG already exists, skipping tag creation"
+            echo "Tag exists, skip"
           else
             git tag -a "$VERSION_TAG" -m "Release $VERSION_TAG"
             git push origin "$VERSION_TAG"
-            echo "✅ Created and pushed tag: $VERSION_TAG"
           fi
 
   deploy-token:
@@ -175,32 +156,36 @@ jobs:
         id: image-tag
         run: |
           echo "tag=${{ needs.build-and-push-token.outputs.version-tag }}" >> $GITHUB_OUTPUT
-          echo "🚀 Deploying version: ${{ needs.build-and-push-token.outputs.version-tag }}"
 
       - name: Deploy CRM to Kubernetes
         run: |
-          # Set default values for auto-deploy (push to main), otherwise use manual inputs
           ENVIRONMENT="${{ github.event.inputs.deploy_environment || 'production' }}"
           NAMESPACE="${{ github.event.inputs.deploy_namespace || 'idea-production' }}"
           IMAGE_TAG="${{ steps.image-tag.outputs.tag }}"
           
-          echo "🚀 Deploying to environment: $ENVIRONMENT"
-          echo "📦 Namespace: $NAMESPACE"
-          echo "🏷️ Image tag: $IMAGE_TAG"
-          
-          VALUES_FILE=""
-          if [ "$ENVIRONMENT" == "production" ]; then
-            VALUES_FILE="-f ${{ env.TOKEN_HELM_CHART_PATH }}/values-prod.yaml"
+          echo "Deploying: env=$ENVIRONMENT namespace=$NAMESPACE tag=$IMAGE_TAG"
+
+          if [ "$ENVIRONMENT" = "production" ]; then
+            echo "Using production values-prod.yaml"
+
+            helm upgrade --install crm-web ${{ env.TOKEN_HELM_CHART_PATH }} \
+              --set image.tag=$IMAGE_TAG \
+              --set namespace=$NAMESPACE \
+              --namespace $NAMESPACE \
+              -f ${{ env.TOKEN_HELM_CHART_PATH }}/values-prod.yaml \
+              --create-namespace \
+              --wait \
+              --timeout=10m
+          else
+            echo "Using default values"
+            helm upgrade --install crm-web ${{ env.TOKEN_HELM_CHART_PATH }} \
+              --set image.tag=$IMAGE_TAG \
+              --set namespace=$NAMESPACE \
+              --namespace $NAMESPACE \
+              --create-namespace \
+              --wait \
+              --timeout=10m
           fi
-          
-          helm upgrade --install crm-web ${{ env.TOKEN_HELM_CHART_PATH }} \
-            --set image.tag=$IMAGE_TAG \
-            --set namespace=$NAMESPACE \
-            --namespace $NAMESPACE \
-            --create-namespace \
-            --wait \
-            --timeout=10m \
-            $VALUES_FILE
 
       - name: Verify deployment
         run: |
@@ -211,18 +196,12 @@ jobs:
 
       - name: Health check
         run: |
-          echo "Waiting for Token to be ready..."
           sleep 60
-          
           RESPONSE=$(curl -s --max-time 15 https://crm.web.iotsystems-vn.com/health || echo "")
-          
           if echo "$RESPONSE" | jq -e '.status=="Healthy"' >/dev/null; then
-            echo "✅ Token is healthy"
             echo "TOKEN_HEALTH=healthy" >> $GITHUB_ENV
           else
-            echo "⚠️ Token health check failed or not ready yet"
             echo "TOKEN_HEALTH=unhealthy" >> $GITHUB_ENV
-            echo "Response was: $RESPONSE"
           fi
 
       - name: Generate summary
